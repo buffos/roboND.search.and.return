@@ -123,7 +123,6 @@ def locate_rock(points_x, points_y):
 def perception_step(Rover):
     # type: (RoverState) -> RoverState
     # Perform perception steps to update Rover()
-    # TODO: 
     # NOTE: camera image is coming to you in Rover.img
     # 1) Define source and destination points for perspective transform
     dst_size = 5
