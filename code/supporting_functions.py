@@ -4,9 +4,11 @@ from PIL import Image
 from io import BytesIO, StringIO
 import base64
 import time
+from rover_state import RoverState
 
 
 def update_rover(Rover, data):
+    # type: (RoverState, dict) -> (RoverState, np.ndarray)
     # Initialize start time and sample positions
     if Rover.start_time is None:
         Rover.start_time = time.time()
