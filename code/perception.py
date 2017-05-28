@@ -10,9 +10,7 @@ def color_threshold(img, rgb_thresh=(160, 160, 160)):
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
-    above_thresh = (img[:, :, 0] > rgb_thresh[0]) \
-                   & (img[:, :, 1] > rgb_thresh[1]) \
-                   & (img[:, :, 2] > rgb_thresh[2])
+    above_thresh = (img[:, :, 0] > rgb_thresh[0]) & (img[:, :, 1] > rgb_thresh[1]) & (img[:, :, 2] > rgb_thresh[2])
     # Index the array of zeros with the boolean array and set to 1
     color_select[above_thresh] = 1
     # Return the binary image
@@ -21,12 +19,8 @@ def color_threshold(img, rgb_thresh=(160, 160, 160)):
 
 def obstacles_threshold(img, rgb_thresh=(90, 90, 90)):
     obstacles_mask = np.zeros_like(img[:, :, 0])
-    below_thresh = (img[:, :, 0] < rgb_thresh[0]) \
-                   & (img[:, :, 1] < rgb_thresh[1]) \
-                   & (img[:, :, 2] < rgb_thresh[2]) \
-                   & (5 < img[:, :, 0]) \
-                   & (5 < img[:, :, 1]) \
-                   & (5 < img[:, :, 2])
+    below_thresh = (img[:, :, 0] < rgb_thresh[0]) & (img[:, :, 1] < rgb_thresh[1]) & (img[:, :, 2] < rgb_thresh[2]) \
+                   & (5 < img[:, :, 0]) & (5 < img[:, :, 1]) & (5 < img[:, :, 2])
     obstacles_mask[below_thresh] = 1
     return obstacles_mask
 
@@ -65,42 +59,41 @@ def to_polar_coords(x_pixel, y_pixel):
 
 
 # Define a function to apply a rotation to pixel positions
-def rotate_pix(xpix, ypix, yaw):
-    # TODO:
+def rotate_pix(x_pixel, y_pixel, yaw):
     # Convert yaw to radians
+    yaw_rad = yaw * np.pi / 180
     # Apply a rotation
-    xpix_rotated = 0
-    ypix_rotated = 0
+    x_pixel_rotated = (x_pixel * np.cos(yaw_rad)) - (y_pixel * np.sin(yaw_rad))
+    y_pixel_rotated = (x_pixel * np.sin(yaw_rad)) + (y_pixel * np.cos(yaw_rad))
     # Return the result  
-    return xpix_rotated, ypix_rotated
+    return x_pixel_rotated, y_pixel_rotated
 
 
 # Define a function to perform a translation
-def translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale):
-    # TODO:
+def translate_pix(x_pixel_rotated, y_pixel_rotated, xpos, ypos, scale):
     # Apply a scaling and a translation
-    xpix_translated = 0
-    ypix_translated = 0
-    # Return the result  
-    return xpix_translated, ypix_translated
+    x_pixel_translated = (x_pixel_rotated / scale) + xpos
+    y_pixel_translated = (y_pixel_rotated / scale) + ypos
+    # Return the result
+    return x_pixel_translated, y_pixel_translated
 
 
 # Define a function to apply rotation and translation (and clipping)
 # Once you define the two functions above this function should work
-def pix_to_world(xpix, ypix, xpos, ypos, yaw, world_size, scale):
+def pix_to_world(x_pixel, y_pixel, xpos, ypos, yaw, world_size, scale):
     # Apply rotation
-    xpix_rot, ypix_rot = rotate_pix(xpix, ypix, yaw)
+    x_pixel_rotated, y_pixel_rotated = rotate_pix(x_pixel, y_pixel, yaw)
     # Apply translation
-    xpix_tran, ypix_tran = translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale)
+    x_pixel_translated, y_pixel_translated = translate_pix(x_pixel_rotated, y_pixel_rotated, xpos, ypos, scale)
     # Perform rotation, translation and clipping all at once
-    x_pix_world = np.clip(np.int_(xpix_tran), 0, world_size - 1)
-    y_pix_world = np.clip(np.int_(ypix_tran), 0, world_size - 1)
+    x_pix_world = np.clip(np.int_(x_pixel_translated), 0, world_size - 1)
+    y_pix_world = np.clip(np.int_(y_pixel_translated), 0, world_size - 1)
     # Return the result
     return x_pix_world, y_pix_world
 
 
 # Define a function to perform a perspective transform
-def perspect_transform(img, src, dst):
+def perspective_transform(img, src, dst):
     M = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))  # keep same size as input image
 
