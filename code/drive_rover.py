@@ -26,7 +26,7 @@ from supporting_functions import update_rover, create_output_images
 sio = socketio.Server()
 app = Flask(__name__)
 
-# Read in ground truth map and create 3-channel green version for overplotting
+# Read in ground truth map and create 3-channel green version for over plotting
 # NOTE: images are read in by default with the origin (0, 0) in the upper left
 # and y-axis increasing downward.
 ground_truth = mpimg.imread('../calibration_images/map_bw.png')
@@ -35,11 +35,12 @@ ground_truth = mpimg.imread('../calibration_images/map_bw.png')
 # map output looks green in the display image
 ground_truth_3d = np.dstack((ground_truth*0, ground_truth*255, ground_truth*0)).astype(np.float)
 
+
 # Define RoverState() class to retain rover state parameters
 class RoverState():
     def __init__(self):
         self.start_time = None # To record the start time of navigation
-        self.total_time = None # To record total duration of naviagation
+        self.total_time = None # To record total duration of navigation
         self.img = None # Current camera image
         self.pos = None # Current position (x, y)
         self.yaw = None # Current yaw angle
@@ -79,9 +80,9 @@ class RoverState():
 Rover = RoverState()
 
 # Variables to track frames per second (FPS)
-# Intitialize frame counter
+# Initialize frame counter
 frame_counter = 0
-# Initalize second counter
+# Initialize second counter
 second_counter = time.time()
 fps = None
 
@@ -139,6 +140,7 @@ def telemetry(sid, data):
     else:
         sio.emit('manual', data={}, skip_sid=True)
 
+
 @sio.on('connect')
 def connect(sid, environ):
     print("connect ", sid)
@@ -148,6 +150,7 @@ def connect(sid, environ):
         "get_samples",
         sample_data,
         skip_sid=True)
+
 
 def send_control(commands, image_string1, image_string2):
     # Define commands to be sent to the rover
@@ -163,6 +166,7 @@ def send_control(commands, image_string1, image_string2):
         "data",
         data,
         skip_sid=True)
+
 
 # Define a function to send the "pickup" command 
 def send_pickup():
