@@ -33,7 +33,7 @@ class RoverState:
         # Ground truth worldmap
         self.ground_truth = None  # type: np.ndarray
         # Current mode (can be forward or stop)
-        self.mode = 'forward'  # type: str
+        self.mode = 'waiting-command'  # type: str
         # Throttle setting when accelerating
         self.throttle_set = 0.2  # type: float
         # Brake setting when braking
@@ -67,3 +67,9 @@ class RoverState:
         self.picking_up = 0  # type: int
         # Set to True to trigger rock pickup
         self.send_pickup = False  # type: bool
+        # a list of pending commands for the robot
+        self.commands = []  # type: list
+        # the departure_point the Robot started from
+        self.departure_point = None  # type: tuple
+        # the current navigation map
+        self.navigation_map = None  # type: np.ndarray
