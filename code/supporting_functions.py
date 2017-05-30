@@ -7,14 +7,23 @@ import time
 from rover_state import RoverState
 
 
+# Define a function to convert telemetry strings to float independent of decimal convention
+def convert_to_float(string_to_convert):
+    if ',' in string_to_convert:
+        float_value = np.float(string_to_convert.replace(',', '.'))
+    else:
+        float_value = np.float(string_to_convert)
+    return float_value
+
+
 def update_rover(Rover, data):
     # type: (RoverState, dict) -> (RoverState, np.ndarray)
     # Initialize start time and sample positions
-    if Rover.start_time is None:
+    if Rover.start_time == None:
         Rover.start_time = time.time()
         Rover.total_time = 0
-        samples_xpos = np.int_([np.float(pos.strip()) for pos in data["samples_x"].split(',')])
-        samples_ypos = np.int_([np.float(pos.strip()) for pos in data["samples_y"].split(',')])
+        samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(';')])
+        samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(';')])
         Rover.samples_pos = (samples_xpos, samples_ypos)
         Rover.samples_found = np.zeros((len(Rover.samples_pos[0]))).astype(np.int)
     # Or just update elapsed time
@@ -23,21 +32,21 @@ def update_rover(Rover, data):
         if np.isfinite(tot_time):
             Rover.total_time = tot_time
     # Print out the fields in the telemetry data dictionary
-    print(data.keys())
+    # print(data.keys())
     # The current speed of the rover in m/s
-    Rover.vel = np.float(data["speed"])
+    Rover.vel = convert_to_float(data["speed"])
     # The current position of the rover
-    Rover.pos = np.fromstring(data["position"], dtype=float, sep=',')
+    Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(';')]
     # The current yaw angle of the rover
-    Rover.yaw = np.float(data["yaw"])
+    Rover.yaw = convert_to_float(data["yaw"])
     # The current yaw angle of the rover
-    Rover.pitch = np.float(data["pitch"])
+    Rover.pitch = convert_to_float(data["pitch"])
     # The current yaw angle of the rover
-    Rover.roll = np.float(data["roll"])
+    Rover.roll = convert_to_float(data["roll"])
     # The current throttle setting
-    Rover.throttle = np.float(data["throttle"])
+    Rover.throttle = convert_to_float(data["throttle"])
     # The current steering angle
-    Rover.steer = np.float(data["steering_angle"])
+    Rover.steer = convert_to_float(data["steering_angle"])
     # Near sample flag
     Rover.near_sample = np.int(data["near_sample"])
     # Picking up flag
@@ -46,7 +55,6 @@ def update_rover(Rover, data):
     print('speed =', Rover.vel, 'position =', Rover.pos, 'throttle =',
           Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample', Rover.near_sample,
           'picking_up', data["picking_up"])
-
     # Get the current image from the center camera of the rover
     imgString = data["image"]
     image = Image.open(BytesIO(base64.b64decode(imgString)))
@@ -108,11 +116,11 @@ def create_output_images(Rover):
     # Grab the total number of map pixels
     tot_map_pix = np.float(len((Rover.ground_truth[:, :, 1].nonzero()[0])))
     # Calculate the percentage of ground truth map that has been successfully found
-    percent_mapped = round(100 * good_nav_pix / tot_map_pix, 1)
+    perc_mapped = round(100 * good_nav_pix / tot_map_pix, 1)
     # Calculate the number of good map pixel detections divided by total pixels
     # found to be navigable terrain
     if tot_nav_pix > 0:
-        fidelity = round(100 * good_nav_pix / tot_nav_pix, 1)
+        fidelity = round(100 * good_nav_pix / (tot_nav_pix), 1)
     else:
         fidelity = 0
     # Flip the map for plotting so that the y-axis points upward in the display
@@ -120,7 +128,7 @@ def create_output_images(Rover):
     # Add some text about map and rock sample detection results
     cv2.putText(map_add, "Time: " + str(np.round(Rover.total_time, 1)) + ' s', (0, 10),
                 cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
-    cv2.putText(map_add, "Mapped: " + str(percent_mapped) + '%', (0, 25),
+    cv2.putText(map_add, "Mapped: " + str(perc_mapped) + '%', (0, 25),
                 cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
     cv2.putText(map_add, "Fidelity: " + str(fidelity) + '%', (0, 40),
                 cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 255), 1)
