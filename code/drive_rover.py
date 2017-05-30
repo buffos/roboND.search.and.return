@@ -17,6 +17,32 @@ import pickle
 import matplotlib.image as mpimg
 import time
 from rover_state import RoverState
+import logging
+
+DEBUG_ON = True
+
+logger = logging.getLogger('main_app')
+
+# create file handler
+fh = logging.FileHandler('robot_search_logging.log')
+
+if DEBUG_ON is True:
+    logger.setLevel(logging.DEBUG)
+    fh.setLevel(logging.DEBUG)
+else:
+    logger.setLevel(logging.INFO)
+    fh.setLevel(logging.INFO)
+
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)  # ERROR should be in the normal app.
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+ch.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 # Import functions for perception and decision making
 from perception import perception_step
