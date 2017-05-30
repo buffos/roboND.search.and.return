@@ -42,6 +42,20 @@ def rocks_threshold(img):
     return mask_rock
 
 
+def rocks_threshold_2(img, threshold_low=(100, 100, 0), threshold_high=(160, 160, 40)):
+    # Create an array of zeros same xy size as img, but single channel
+    color_select = np.zeros_like(img[:, :, 0])
+    # Require that each pixel be above all three threshold values in RGB
+    # above_thresh will now contain a boolean array with "True"
+    # where threshold was met
+    above_thresh = ~((img[:, :, 0] > threshold_low[0]) & (img[:, :, 0] < threshold_high[0]) &
+                     (img[:, :, 1] > threshold_low[1]) & (img[:, :, 1] < threshold_high[1]) &
+                     (img[:, :, 2] > threshold_low[2]) & (img[:, :, 2] < threshold_high[2]))
+    # Index the array of zeros with the boolean array and set to 1
+    color_select[above_thresh] = 1
+    return color_select
+
+
 # Define a function to convert to rover-centric coordinates
 def rover_coords(binary_img):
     # Identify nonzero pixels
@@ -115,7 +129,7 @@ def locate_rock(points_x, points_y):
     if points_x.size > 0 and points_y.size > 0:
         return np.int_(np.mean(points_x)), np.int_(np.mean(points_y))
     else:
-        return None
+        return None, None
 
 
 # Apply the above functions in succession and update the Rover state accordingly
