@@ -52,9 +52,9 @@ def update_rover(Rover, data):
     # Picking up flag
     Rover.picking_up = np.int(data["picking_up"])
 
-    print('speed =', Rover.vel, 'position =', Rover.pos, 'throttle =',
-          Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample', Rover.near_sample,
-          'picking_up', data["picking_up"])
+    # print('speed =', Rover.vel, 'position =', Rover.pos, 'throttle =',
+    #       Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample', Rover.near_sample,
+    #       'picking_up', data["picking_up"])
     # Get the current image from the center camera of the rover
     imgString = data["image"]
     image = Image.open(BytesIO(base64.b64decode(imgString)))
