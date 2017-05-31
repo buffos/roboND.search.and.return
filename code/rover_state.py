@@ -78,6 +78,7 @@ class RoverState:
         self.escaping = False  # type: bool
         # a counter for identifying stuck vehicle
         self.stuck_counter = 0  # type: int
+        self.previous_position = None  # type: np.ndarray
         # Worldmap
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples
@@ -89,7 +90,18 @@ class RoverState:
 
     def update_state(self):
         x, y = self.pos
-        self.visited_map[int(y), int(x)] = 1 # mark the position as visited
+        self.visited_map[int(y), int(x)] = 1  # mark the position as visited
+        # just to make sure we are not stuck in any loop with brakes on
+        # action will only set those and do not need to unset them.
+        print("DISTANCE FROM PREVIOUS POINT: ", distance(self.pos, self.previous_position))
+        if self.stuck_counter == 0 :
+            # change previous position when the robot has traveled
+            self.previous_position = self.pos
+        self.stuck_counter = self.stuck_counter + 1 if distance(self.pos, self.previous_position) < 0.5 else 0
+
+        self.brake = 0
+        self.throttle = 0
+        self.steer = 0
 
     def next_cycle(self):
         if self.mode == 'waiting-command':
@@ -187,19 +199,17 @@ class RoverState:
         :return: 
         """
         center = len(self.nav_angles[(-0.1 <= self.nav_angles) & (self.nav_angles <= 0.1)])
-        left = len(self.nav_angles[self.nav_angles >  0.1])
+        left = len(self.nav_angles[self.nav_angles > 0.1])
         right = len(self.nav_angles[self.nav_angles < -0.1])
 
         return left, center, right
 
-    def generate_exploration_map(self, point_robot):
+    def generate_exploration_map(self):
         # init the map
         self.navigation_map = np.full(self.worldmap[:, :, 0].shape, -1)  # unknown or empty
         accessibility_condition = (self.worldmap[:, :, 2] > self.worldmap[:, :, 0]) & (self.worldmap[:, :, 2] > 10)
         obstacles_condition = (self.worldmap[:, :, 0] > self.worldmap[:, :, 2]) & (self.worldmap[:, :, 0] > 10)
-        visited_condition = (self.visited_map[:,:] == 1)
+        visited_condition = (self.visited_map[:, :] == 1)
         self.navigation_map[accessibility_condition] = 0  # terrain
         self.navigation_map[obstacles_condition] = -2  # obstacles
-        self.navigation_map[visited_condition] = 1  # obstacles
-
-
+        self.navigation_map[visited_condition] = 1  # visited

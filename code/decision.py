@@ -1,5 +1,5 @@
 import numpy as np
-# import queue
+from utilities import create_navigation_map_string
 from rover_state import RoverState
 import logging
 
@@ -61,6 +61,8 @@ def find_next_point(Rover):
 def decision_step(Rover):
     # type: (RoverState) -> RoverState
 
+    Rover.update_state()
+
     if Rover.base is None:
         assert (Rover.pos is not None)
         Rover.base = Rover.pos
@@ -76,42 +78,74 @@ def decision_step(Rover):
     print("Velocity", Rover.vel)
 
     trapped = 0
-    trapped = trapped + 1 if center < 100 else trapped
-    trapped = trapped + 1 if left < 100 else trapped
-    trapped = trapped + 1 if right < 100 else trapped
+    trapped = trapped + 1 if center < 30 else trapped
+    trapped = trapped + 1 if left < 30 else trapped
+    trapped = trapped + 1 if right < 30 else trapped
 
     print(trapped)
+    print ("Stuck counter: ", Rover.stuck_counter)
 
-    if trapped > 1 and center < 100: # so no forward
+    Rover.generate_exploration_map()
+    # logger.debug(create_navigation_map_string(Rover.navigation_map, 50, 50, Rover.pos))
+
+    if Rover.vel > 2.0:
+        Rover.brake = Rover.vel  # do not speed and brake as hard as speed
+
+    if 1500 > Rover.stuck_counter > 1000:
+        print("STUCK - LEFT BACK")
+        Rover.steer = 15
+        Rover.throttle = -5
+    elif 2000 >Rover.stuck_counter > 1500:  # try steering the other way
+        print("STUCK - RIGHT BACK")
+        Rover.steer = -15
+        Rover.throttle = -5
+    elif 2500> Rover.stuck_counter > 2000:  # try steering the other way
+        print("FRONT LEFT-STUCK")
+        Rover.steer = 15
+        Rover.throttle = 0
+    elif 3000> Rover.stuck_counter > 2500:  # try steering the other way
+        print("FRONT RIGHT-STUCK")
+        Rover.steer = -15
+        Rover.throttle = 0
+    elif Rover.stuck_counter > 3000:
+        Rover.stuck_counter = 1001 # loop again all strategies
+
+    elif trapped > 1 and center < 100:  # so no forward
         if Rover.vel > 0:
-            Rover.throttle = 0
-            Rover.brake = Rover.brake_set
+            Rover.brake = Rover.brake_set  # stop
         else:
-            Rover.brake = 0
-            Rover.steer = 15
+            Rover.steer = -15  # steer right. brakes are already set to 0 by update state
 
     elif trapped > 1 and center > 100:
         if Rover.vel > 1:
-            Rover.throttle = 0
+            pass
         else:
             Rover.throttle = 0.1  # go slowly its narrow
-    elif center > 500 :
+    elif center > 300 and left < 300:
         if Rover.vel < 1:
             Rover.throttle = 0.5
         else:
-            Rover.throttle = 0
-    elif left > right and left >500:
-        Rover.steer = 5
+            pass
+    elif center > 300 and left > 300:
+        Rover.steer = 15  # try to follow left wall
         if Rover.vel < 1:
             Rover.throttle = 0.5
         else:
-            Rover.throttle = 0
-    elif right > left and right > 500:
+            pass
+    elif left > 300:
+        Rover.steer = 15
+        if Rover.vel < 1:
+            Rover.throttle = 0.5
+        else:
+            pass
+    elif right > 300 and left < 150:
         Rover.steer = -5
         if Rover.vel < 1:
             Rover.throttle = 0.5
         else:
-            Rover.throttle = 0
+            pass
+    else:
+        Rover.steer = -10
 
     # Rover.next_cycle()
 
