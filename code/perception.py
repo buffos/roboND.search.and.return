@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from rover_state import RoverState
-from math import sqrt
+from utilities import distance
 
 
 # Identify pixels above the threshold
@@ -127,10 +127,6 @@ def perspective_transform(img, src, dst):
     return warped
 
 
-def distance(p_1, p_2):
-    return sqrt((p_1[0] - p_2[0]) ** 2 + (p_1[1] - p_2[1]) ** 2)
-
-
 def locate_rock(points_x, points_y):
     if points_x.size > 0 and points_y.size > 0:
         return np.int_(np.mean(points_x)), np.int_(np.mean(points_y))
@@ -197,7 +193,7 @@ def perception_step(Rover):
     # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
     #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
     #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    if 0<=Rover.roll<=10 and  0<=Rover.pitch<=10:
+    if 0.0 <= Rover.roll <= 10 and 0.0 <= Rover.pitch <= 10:
         Rover.worldmap[obstacles_y_world, obstacles_x_world, 0] += 1
         Rover.worldmap[rocks_y_world, rocks_x_world, 1] += 1
         Rover.worldmap[terrain_y_world, terrain_x_world, 2] += 1

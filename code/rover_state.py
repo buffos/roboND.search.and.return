@@ -1,4 +1,5 @@
 import numpy as np
+from utilities import distance
 
 
 # Define RoverState() class to retain rover state parameters
@@ -38,15 +39,15 @@ class RoverState:
         self.throttle_set = 0.2  # type: float
         # Brake setting when braking
         self.brake_set = 2  # type: int
-        # The stop_forward and go_forward fields below represent total count
+        # The threshold_stop_forward and threshold_go_forward fields below represent total count
         # of navigable terrain pixels.  This is a very crude form of knowing
         # when you can keep going and when you should stop.  Feel free to
         # get creative in adding new fields or modifying these!
 
         # Threshold to initiate stopping
-        self.stop_forward = 50  # type: int
+        self.threshold_stop_forward = 50  # type: int
         # Threshold to go forward again
-        self.go_forward = 500  # type: int
+        self.threshold_go_forward = 500  # type: int
         # Maximum velocity (meters/second)
         self.max_vel = 2  # type: int
         # Image output from perception step
@@ -70,7 +71,7 @@ class RoverState:
         # Set to True to trigger rock pickup
         self.send_pickup = False  # type: bool
         # a list of pending commands for the robot
-        self.commands = ['go-yaw 0.0' , 'go-yaw 90.0', 'go-yaw 180.0', 'go-yaw 270.0', 'go-yaw 0.0']  # type: list
+        self.commands = ['go-yaw 0.0', 'go-yaw 90.0', 'go-yaw 180.0', 'go-yaw 270.0', 'go-yaw 0.0']  # type: list
         # the departure_point the Robot started from
         self.departure_point = None  # type: tuple
         # the current navigation map
@@ -78,6 +79,99 @@ class RoverState:
         # robot starting point
         self.base = None  # type: tuple
         # the thresholded terrain
-        self.terrain = None # type: np.ndarray
+        self.terrain = None  # type: np.ndarray
         # a flag the Robot is on unstuck mode
-        self.escaping = False # type: bool
+        self.escaping = False  # type: bool
+        # a counter for identifying stuck vehicle
+        self.stuck_counter = 0  # type: int
+
+    def next_cycle(self):
+        if self.mode == 'waiting-command':
+            if len(self.commands) != 0:  # there are still commands to execute
+                self.mode = self.commands[0]  # this is one of the known commands that is_executing knows to handle
+            else:  # no commands so lets find new points
+                pass
+        elif self.mode == 'finished-command':
+            self.commands.pop(0)
+            self.mode = 'waiting-command'
+        elif self.is_executing_command():
+            self.finish_pending_command()
+
+    def finish_pending_command(self):
+        """
+        Interpreting test commands to actual functions
+        :return: 
+        """
+        if self.mode.startswith('go-forward'):
+            self.go_forward()
+        elif self.mode.startswith('go-yaw'):
+            self.go_yaw()
+
+    def is_executing_command(self):
+        """
+        Is a known command executed
+        :return: 
+        """
+        if self.mode.startswith('go-forward') or self.mode.startswith('go-yaw'):
+            return True
+        return False
+
+    def go_yaw(self):
+        """Will drive the Robot one square ahead"""
+        if self.vel > 0:
+            self.throttle = 0
+            self.brake = self.brake_set
+            return
+        else:
+            self.brake = 0
+
+        target_yaw = float(self.mode.split()[1])  # command is go-yaw angle. always in [-pi pi]
+        current_yaw = self.yaw - 360 if self.yaw > 180 else self.yaw
+
+        # choose the shortest path for rotating
+        if abs(target_yaw - current_yaw) < abs(360 - target_yaw + current_yaw):
+            steering = target_yaw - current_yaw
+        else:
+            steering = -(360 - target_yaw + current_yaw)
+
+        if abs(steering) < 0.1:  # completed turning
+            self.steer = 0
+            self.mode = 'finished-command'
+        else:
+            self.throttle = 0
+            self.steer = min(max(steering, -15), 15)
+            self.mode = self.commands[0]
+
+    def go_forward(self):
+        """Will drive the Robot one square ahead"""
+
+        self.brake = 0
+        meters = float(self.mode.split()[1])  # command is go-forward 10
+
+        # current position of robot
+        x, y = self.pos[0], self.pos[1]
+
+        if self.departure_point is None:
+            self.departure_point = (x, y)
+
+        current_distance = distance((x, y), self.departure_point)
+        print(current_distance)
+
+        # check the distance the robot has traveled
+        if meters - current_distance < 0.1:
+            self.departure_point = None  # reached destination
+            self.throttle = 0
+            self.mode = 'finished-command'
+        elif meters - current_distance >= 1.0:
+            self.throttle = 1
+            self.mode = self.commands[0]
+        else:
+            self.throttle = 0.5
+            self.mode = self.commands[0]
+
+    def collect_rock(self):
+        if self.near_sample and self.vel == 0 and not self.picking_up:
+            self.send_pickup = True
+        elif self.near_sample and self.vel > 0:
+            self.mode = 'waiting-command'  # this will suspend commands
+
