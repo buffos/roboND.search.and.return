@@ -19,6 +19,10 @@ def get_moves(row, col, max_rows, max_cols, all_moves=False):
     return [move for move in full_moves if 0 <= move[0] < max_rows and 0 <= move[1] < max_cols]
 
 
+# region map creation
+
+# endregion
+
 # region conditions
 
 def is_clear_ahead(Rover):
@@ -29,9 +33,6 @@ def is_clear_ahead(Rover):
     if not clear:
         print("FRONT PIXELS ARE FEW: ", front_pixels)
     return clear
-
-
-
 
 
 # endregion
@@ -68,6 +69,50 @@ def decision_step(Rover):
     logger.debug("Current Commands: {0!s}".format(Rover.commands))
     print("Current Mode: {0}".format(Rover.mode))
 
-    Rover.next_cycle()
+    left, center, right = Rover.get_navigation_angles()
+    print("CENTER: ", center)
+    print("RIGHT: ", right)
+    print("LEFT: ", left)
+    print("Velocity", Rover.vel)
+
+    trapped = 0
+    trapped = trapped + 1 if center < 100 else trapped
+    trapped = trapped + 1 if left < 100 else trapped
+    trapped = trapped + 1 if right < 100 else trapped
+
+    print(trapped)
+
+    if trapped > 1 and center < 100: # so no forward
+        if Rover.vel > 0:
+            Rover.throttle = 0
+            Rover.brake = Rover.brake_set
+        else:
+            Rover.brake = 0
+            Rover.steer = 15
+
+    elif trapped > 1 and center > 100:
+        if Rover.vel > 1:
+            Rover.throttle = 0
+        else:
+            Rover.throttle = 0.1  # go slowly its narrow
+    elif center > 500 :
+        if Rover.vel < 1:
+            Rover.throttle = 0.5
+        else:
+            Rover.throttle = 0
+    elif left > right and left >500:
+        Rover.steer = 5
+        if Rover.vel < 1:
+            Rover.throttle = 0.5
+        else:
+            Rover.throttle = 0
+    elif right > left and right > 500:
+        Rover.steer = -5
+        if Rover.vel < 1:
+            Rover.throttle = 0.5
+        else:
+            Rover.throttle = 0
+
+    # Rover.next_cycle()
 
     return Rover

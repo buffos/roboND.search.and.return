@@ -54,10 +54,6 @@ class RoverState:
         # Update this image to display your intermediate analysis steps
         # on screen in autonomous mode
         self.vision_image = np.zeros((160, 320, 3), dtype=np.float)  # type: np.ndarray
-        # Worldmap
-        # Update this image with the positions of navigable terrain
-        # obstacles and rock samples
-        self.worldmap = np.zeros((200, 200, 3), dtype=np.float)  # type: np.ndarray
         # To store the actual sample positions
         self.samples_pos = None
         # To store the initial count of samples
@@ -74,8 +70,6 @@ class RoverState:
         self.commands = ['go-yaw 0.0', 'go-yaw 90.0', 'go-yaw 180.0', 'go-yaw 270.0', 'go-yaw 0.0']  # type: list
         # the departure_point the Robot started from
         self.departure_point = None  # type: tuple
-        # the current navigation map
-        self.navigation_map = None  # type: np.ndarray
         # robot starting point
         self.base = None  # type: tuple
         # the thresholded terrain
@@ -84,6 +78,18 @@ class RoverState:
         self.escaping = False  # type: bool
         # a counter for identifying stuck vehicle
         self.stuck_counter = 0  # type: int
+        # Worldmap
+        # Update this image with the positions of navigable terrain
+        # obstacles and rock samples
+        self.worldmap = np.zeros((200, 200, 3), dtype=np.float)  # type: np.ndarray
+        # the current navigation map
+        self.navigation_map = None  # type: np.ndarray
+        # marks every point the robot has
+        self.visited_map = np.zeros((200, 200), dtype=np.float)  # type: np.ndarray
+
+    def update_state(self):
+        x, y = self.pos
+        self.visited_map[int(y), int(x)] = 1 # mark the position as visited
 
     def next_cycle(self):
         if self.mode == 'waiting-command':
@@ -174,4 +180,26 @@ class RoverState:
             self.send_pickup = True
         elif self.near_sample and self.vel > 0:
             self.mode = 'waiting-command'  # this will suspend commands
+
+    def get_navigation_angles(self):
+        """
+        Return how many driving angles are available for center left and right
+        :return: 
+        """
+        center = len(self.nav_angles[(-0.1 <= self.nav_angles) & (self.nav_angles <= 0.1)])
+        left = len(self.nav_angles[self.nav_angles >  0.1])
+        right = len(self.nav_angles[self.nav_angles < -0.1])
+
+        return left, center, right
+
+    def generate_exploration_map(self, point_robot):
+        # init the map
+        self.navigation_map = np.full(self.worldmap[:, :, 0].shape, -1)  # unknown or empty
+        accessibility_condition = (self.worldmap[:, :, 2] > self.worldmap[:, :, 0]) & (self.worldmap[:, :, 2] > 10)
+        obstacles_condition = (self.worldmap[:, :, 0] > self.worldmap[:, :, 2]) & (self.worldmap[:, :, 0] > 10)
+        visited_condition = (self.visited_map[:,:] == 1)
+        self.navigation_map[accessibility_condition] = 0  # terrain
+        self.navigation_map[obstacles_condition] = -2  # obstacles
+        self.navigation_map[visited_condition] = 1  # obstacles
+
 
