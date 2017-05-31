@@ -6,34 +6,40 @@ from math import sqrt
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
-def color_threshold(img, rgb_thresh=(160, 160, 160)):
+def color_threshold(img, rgb_thresh=(140, 140, 140)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:, :, 0])
+    image_y, image_x, _ = img.shape
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
     above_thresh = (img[:, :, 0] > rgb_thresh[0]) & (img[:, :, 1] > rgb_thresh[1]) & (img[:, :, 2] > rgb_thresh[2])
     # Index the array of zeros with the boolean array and set to 1
-    color_select[above_thresh] = 1
+    color_select[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)][
+        above_thresh[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)]] = 1
     # Return the binary image
     return color_select
 
 
-def obstacles_threshold(img, rgb_thresh=(90, 90, 90)):
+def obstacles_threshold(img, threshold_high=(140, 140, 140), threshold_low=(30, 30, 30)):
     obstacles_mask = np.zeros_like(img[:, :, 0])
-    below_thresh = (img[:, :, 0] < rgb_thresh[0]) & \
-                   (img[:, :, 1] < rgb_thresh[1]) & \
-                   (img[:, :, 2] < rgb_thresh[2]) & \
-                   (5 < img[:, :, 0]) & \
-                   (5 < img[:, :, 1]) & \
-                   (5 < img[:, :, 2])
-    obstacles_mask[below_thresh] = 1
+    image_y, image_x, _ = img.shape
+    below_thresh = (img[:, :, 0] < threshold_high[0]) & \
+                   (img[:, :, 1] < threshold_high[1]) & \
+                   (img[:, :, 2] < threshold_high[2]) & \
+                   (threshold_low[0] < img[:, :, 0]) & \
+                   (threshold_low[1] < img[:, :, 1]) & \
+                   (threshold_low[2] < img[:, :, 2])
+    # temp_select[below_thresh] = 1
+    obstacles_mask[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)][
+        below_thresh[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)]] = 1
+
     return obstacles_mask
 
 
-def rocks_threshold(img):
+def rocks_threshold_2(img):
     low_yellow = np.array([20, 100, 100], dtype="uint8")
-    high_yellow = np.array([25, 255, 255], dtype="uint8")
+    high_yellow = np.array([255, 255, 255], dtype="uint8")
 
     # convert to HSV space
     img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV, 3)
@@ -42,15 +48,15 @@ def rocks_threshold(img):
     return mask_rock
 
 
-def rocks_threshold_2(img, threshold_low=(100, 100, 0), threshold_high=(160, 160, 40)):
+def rocks_threshold(img, threshold_low=(200, 200, 0), threshold_high=(240, 240, 30)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:, :, 0])
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
-    above_thresh = ~((img[:, :, 0] > threshold_low[0]) & (img[:, :, 0] < threshold_high[0]) &
-                     (img[:, :, 1] > threshold_low[1]) & (img[:, :, 1] < threshold_high[1]) &
-                     (img[:, :, 2] > threshold_low[2]) & (img[:, :, 2] < threshold_high[2]))
+    above_thresh = ((img[:, :, 0] > threshold_low[0]) & (img[:, :, 0] < threshold_high[0]) &
+                    (img[:, :, 1] > threshold_low[1]) & (img[:, :, 1] < threshold_high[1]) &
+                    (img[:, :, 2] > threshold_low[2]) & (img[:, :, 2] < threshold_high[2]))
     # Index the array of zeros with the boolean array and set to 1
     color_select[above_thresh] = 1
     return color_select
@@ -152,17 +158,20 @@ def perception_step(Rover):
     birds_view = perspective_transform(Rover.img, source, destination)
 
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(200, 200, 200))
-    thresholded_obstacles = obstacles_threshold(birds_view, rgb_thresh=(50, 50, 50))
+    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(160, 160, 160))
+    thresholded_obstacles = obstacles_threshold(birds_view,
+                                                threshold_high=(140, 140, 140),
+                                                threshold_low=(30, 30, 30))
     thresholded_rocks = rocks_threshold(birds_view)
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
     #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
     #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
-    Rover.vision_image[:, :, 0] = thresholded_obstacles
-    Rover.vision_image[:, :, 1] = thresholded_rocks
-    Rover.vision_image[:, :, 2] = thresholded_terrain
+    Rover.terrain = thresholded_terrain
+    Rover.vision_image[:, :, 0] = thresholded_obstacles * 255
+    Rover.vision_image[:, :, 1] = thresholded_rocks * 255
+    Rover.vision_image[:, :, 2] = thresholded_terrain * 255
 
     # 5) Convert map image pixel values to rover-centric coords
     terrain_x_pixel, terrain_y_pixel = rover_coords(thresholded_terrain)
@@ -188,9 +197,10 @@ def perception_step(Rover):
     # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
     #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
     #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    Rover.worldmap[obstacles_y_world, obstacles_x_world, 0] += 1
-    Rover.worldmap[rocks_y_world, rocks_x_world, 1] += 1
-    Rover.worldmap[terrain_y_world, terrain_x_world, 2] += 1
+    if 0<=Rover.roll<=10 and  0<=Rover.pitch<=10:
+        Rover.worldmap[obstacles_y_world, obstacles_x_world, 0] += 1
+        Rover.worldmap[rocks_y_world, rocks_x_world, 1] += 1
+        Rover.worldmap[terrain_y_world, terrain_x_world, 2] += 1
 
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles

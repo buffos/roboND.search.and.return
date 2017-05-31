@@ -85,7 +85,7 @@ def telemetry(sid, data):
         fps = frame_counter
         frame_counter = 0
         second_counter = time.time()
-    print("Current FPS: {}".format(fps))
+    # print("Current FPS: {}".format(fps))
 
     if data:
         global Rover

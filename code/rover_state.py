@@ -37,7 +37,7 @@ class RoverState:
         # Throttle setting when accelerating
         self.throttle_set = 0.2  # type: float
         # Brake setting when braking
-        self.brake_set = 10  # type: int
+        self.brake_set = 2  # type: int
         # The stop_forward and go_forward fields below represent total count
         # of navigable terrain pixels.  This is a very crude form of knowing
         # when you can keep going and when you should stop.  Feel free to
@@ -59,6 +59,8 @@ class RoverState:
         self.worldmap = np.zeros((200, 200, 3), dtype=np.float)  # type: np.ndarray
         # To store the actual sample positions
         self.samples_pos = None
+        # To store the initial count of samples
+        self.samples_to_find = 0  # To store the initial count of samples
         # To count the number of samples found
         self.samples_found = 0  # type: int
         # Will be set to telemetry value data["near_sample"]
@@ -68,8 +70,14 @@ class RoverState:
         # Set to True to trigger rock pickup
         self.send_pickup = False  # type: bool
         # a list of pending commands for the robot
-        self.commands = []  # type: list
+        self.commands = ['go-yaw 0.0' , 'go-yaw 90.0', 'go-yaw 180.0', 'go-yaw 270.0', 'go-yaw 0.0']  # type: list
         # the departure_point the Robot started from
         self.departure_point = None  # type: tuple
         # the current navigation map
         self.navigation_map = None  # type: np.ndarray
+        # robot starting point
+        self.base = None  # type: tuple
+        # the thresholded terrain
+        self.terrain = None # type: np.ndarray
+        # a flag the Robot is on unstuck mode
+        self.escaping = False # type: bool
