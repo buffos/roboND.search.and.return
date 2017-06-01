@@ -15,8 +15,7 @@ def color_threshold(img, rgb_thresh=(140, 140, 140)):
     # where threshold was met
     above_thresh = (img[:, :, 0] > rgb_thresh[0]) & (img[:, :, 1] > rgb_thresh[1]) & (img[:, :, 2] > rgb_thresh[2])
     # Index the array of zeros with the boolean array and set to 1
-    color_select[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)][
-        above_thresh[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)]] = 1
+    color_select[80:, 80:240][above_thresh[80:, 80:240]] = 1
     # Return the binary image
     return color_select
 
@@ -31,8 +30,7 @@ def obstacles_threshold(img, threshold_high=(140, 140, 140), threshold_low=(30, 
                    (threshold_low[1] < img[:, :, 1]) & \
                    (threshold_low[2] < img[:, :, 2])
     # temp_select[below_thresh] = 1
-    obstacles_mask[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)][
-        below_thresh[int(image_y / 2):, int(image_x / 4):int(image_x * 3 / 4)]] = 1
+    obstacles_mask[80:, 80:240][below_thresh[80:, 80:240]] = 1
 
     return obstacles_mask
 
@@ -154,10 +152,10 @@ def perception_step(Rover):
     birds_view = perspective_transform(Rover.img, source, destination)
 
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(120, 100, 100))
+    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(160, 160, 160))
     thresholded_obstacles = obstacles_threshold(birds_view,
-                                                threshold_high=(100, 100, 80),
-                                                threshold_low=(5, 5, 5))
+                                                threshold_high=(160, 160, 100),
+                                                threshold_low=(0, 0, 0))
     thresholded_rocks = rocks_threshold(birds_view)
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
@@ -199,4 +197,6 @@ def perception_step(Rover):
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles
     Rover.nav_dists, Rover.nav_angles = to_polar_coords(terrain_x_pixel, terrain_y_pixel)
+    # Rover.obs_dists, Rover.obs_angles = to_polar_coords(obstacles_x_pixel, obstacles_y_pixel)
+    Rover.rock_dists, Rover.rock_angles = to_polar_coords(rocks_x_pixel, rocks_y_pixel)
     return Rover
