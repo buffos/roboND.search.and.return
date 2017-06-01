@@ -28,10 +28,14 @@ class RoverState:
         self.throttle = 0  # type: float
         # Current brake value
         self.brake = 0  # type: float
-        # Angles of navigable terrain pixels
-        self.nav_angles = None  # type: np.ndarray
+        # Angles (polar) of terrain, obstacles and rocks
         # Distances of navigable terrain pixels
+        self.nav_angles = None  # type: np.ndarray
         self.nav_dists = None  # type: np.ndarray
+        self.obs_angles = None  # type: np.ndarray
+        self.obs_dists = None  # type: np.ndarray
+        self.rock_angles = None  # type: np.ndarray
+        self.rock_dists = None  # type: np.ndarray
         # Ground truth worldmap
         self.ground_truth = None  # type: np.ndarray
         # Current mode (can be forward or stop)
@@ -99,7 +103,6 @@ class RoverState:
         self.visited_map[int(y), int(x)] = 1  # mark the position as visited
         # just to make sure we are not stuck in any loop with brakes on
         # action will only set those and do not need to unset them.
-        print("DISTANCE FROM PREVIOUS POINT: ", distance(self.pos, self.previous_position))
         if self.stuck_counter == 0:
             # change previous position when the robot has traveled
             self.previous_position = self.pos
@@ -113,14 +116,13 @@ class RoverState:
 
     def next_cycle(self):
         # handling stuck robot
-        if self.stuck_counter > 500 and self.mode != 'unstuck':
+        if self.stuck_counter > 500 and self.mode != 'unstuck' and not self.picking_up:
             self.commands = ['unstuck'] + self.commands  # put it in front
             self.mode = 'waiting-command'
         elif self.stuck_counter < 500 and self.mode == 'unstuck':
             self.mode = 'finished-command'
 
         if self.seen_rock is not None and not self.is_collecting:
-            self.brake = 15  # freeze it
             self.commands = ['collecting'] + self.commands
             self.mode = 'waiting-command'
             self.is_collecting = True
@@ -166,6 +168,8 @@ class RoverState:
     def mapping(self):
         trapped = self.trapped()
         left, center, right = self.get_navigation_angles()
+        bottom_close_l, middle_far_l, up_far_l = self.get_obstacles_left()
+        bottom_close_r, middle_far_r, up_far_r = self.get_obstacles_right()
 
         if trapped > 1 and center < 100:  # so no forward
             if self.vel > 0:
@@ -178,31 +182,38 @@ class RoverState:
                 pass
             else:
                 self.throttle = 0.1  # go slowly its narrow
-        elif center > 300 and left < 300:
-            if self.vel < 1:
-                self.throttle = 0.5
-            else:
-                pass
+        elif bottom_close_l == 0 and middle_far_l == 0 and up_far_l == 0:
+            self.steer = np.random.uniform(8, 12)*np.random.choice([-1,1],1)
+            # to avoid running into circles on open spaces form [-12,-8] U [8, 12]
+            self.drive_safely()
+        elif bottom_close_l > 0:  # to close to the left wall
+            self.steer = np.random.uniform(-12, -15)
+            self.drive_safely()
+        elif bottom_close_r > 0:  # to close to the right wall
+            self.steer = np.random.uniform(12, 15)
+            self.drive_safely()
+        elif middle_far_l < 80:  # intersection -> gap in the middle
+            self.steer = np.random.uniform(12, 15)
+            self.drive_safely()
+        elif center > 300 and left < 301:
+            self.drive_safely()
         elif center > 300 and left > 300:
-            self.steer = np.random.uniform(10, 15)  # try to follow left wall
-            if self.vel < 1:
-                self.throttle = 0.5
-            else:
-                pass
+            self.steer = np.random.uniform(12, 15)  # try to follow left wall
+            self.drive_safely()
         elif left > 300:
-            self.steer = np.random.uniform(10, 15)
-            if self.vel < 1:
-                self.throttle = 0.5
-            else:
-                pass
+            self.steer = np.random.uniform(12, 15)
+            self.drive_safely()
         elif right > 300 and left < 150:
-            self.steer = -5
-            if self.vel < 1:
-                self.throttle = 0.5
-            else:
-                pass
+            self.steer = np.random.uniform(-3, -6)
+            self.drive_safely()
         else:
-            self.steer = self.steer = np.random.uniform(-8, -12)
+            self.steer = self.steer = np.random.uniform(-10, -15)
+
+    def drive_safely(self):
+        if self.vel < 1:
+            self.throttle = 0.5
+        else:
+            pass
 
     def go_yaw(self):
         """Will drive the Robot one square ahead"""
@@ -248,82 +259,87 @@ class RoverState:
             self.mode = self.commands[0]
 
     def unstuck(self):
-        extra_wait = 0
-        strategy_threshold = 300
         if self.picking_up:
             extra_wait = 200
 
-        if strategy_threshold * 2 + extra_wait > self.stuck_counter >= strategy_threshold * 1 + extra_wait:
+        min_strategy = 1
+        max_strategy = 7
+        strategy = np.random.randint(min_strategy, max_strategy + 1)
+        self.unstuck_strategy(strategy)
+
+    def unstuck_strategy(self, strategy):
+        if strategy == 1:
             # try steering the other way
             print("FRONT STUCK")
             self.steer = 0
-            self.throttle = 2
-        elif strategy_threshold * 3 + extra_wait > self.stuck_counter > strategy_threshold * 2 + extra_wait:
-            print("STUCK - LEFT BACK")
-            self.steer = 15
-            self.throttle = -5
-        elif strategy_threshold * 4 + extra_wait > self.stuck_counter >= strategy_threshold * 3 + extra_wait:
+            self.throttle = 10
+        elif strategy == 2:
             # try steering the other way
             print("STUCK - RIGHT BACK")
-            self.steer = -15
-            self.throttle = -5
-        elif strategy_threshold * 5 + extra_wait > self.stuck_counter >= strategy_threshold * 4 + extra_wait:
-            # try steering the other way
-            print("FRONT LEFT-STUCK")
-            self.steer = 15
-            self.throttle = 0
-        elif strategy_threshold * 6 + extra_wait > self.stuck_counter >= strategy_threshold * 5 + extra_wait:
+            self.steer = np.random.uniform(-13, -15)
+            self.throttle = -10
+        elif strategy == 3:
+            print("STUCK - LEFT BACK")
+            self.steer = np.random.uniform(13, 15)
+            self.throttle = -10
+        elif strategy == 4:
             # try steering the other way
             print("FRONT RIGHT-STUCK")
-            self.steer = -15
+            self.steer = np.random.uniform(-13, -15)
             self.throttle = 0
-        elif strategy_threshold * 7 + extra_wait > self.stuck_counter >= strategy_threshold * 6 + extra_wait:
+        elif strategy == 5:
             # try steering the other way
-            print("FRONT LEFT-WITH-SPEED-STUCK")
-            self.steer = 15
-            self.throttle = 5
-        elif strategy_threshold * 8 + extra_wait > self.stuck_counter >= strategy_threshold * 7 + extra_wait:
+            print("FRONT LEFT-STUCK")
+            self.steer = np.random.uniform(13, 15)
+            self.throttle = 0
+        elif strategy == 6:
             # try steering the other way
             print("FRONT RIGHT-WITH-SPEED-STUCK")
-            self.steer = -15
-            self.throttle = 5
-        elif self.stuck_counter >= strategy_threshold * 8 + extra_wait:
-            self.stuck_counter = strategy_threshold + 1 + extra_wait  # loop again all strategies
+            self.steer = np.random.uniform(-13, -15)
+            self.throttle = 10
+        elif strategy == 7:
+            # try steering the other way
+            print("FRONT LEFT-WITH-SPEED-STUCK")
+            self.steer = np.random.uniform(13, 15)
+            self.throttle = 10
 
     def collect(self):
         self.is_collecting = True
 
         if self.picking_up:
             self.started_picking_up = True
+        elif self.near_sample and not self.picking_up:
+            self.brake = self.brake_set
+            self.throttle = 0
+            self.send_pickup = True
         elif not self.picking_up and self.started_picking_up:
             # finished picking up
             self.started_picking_up = False
             self.seen_rock = None
             self.is_collecting = False
             self.mode = 'finished-command'
-        else:
-            # new_command = ['go-yaw ' + str(yaw_r), 'go-forward ' + str(rock_distance)]
-            # self.commands = new_command + self.commands  # put it in front
-            # self.mode = 'waiting-command'
-            left, center, right = self.get_navigation_angles()
-            rock_distance = distance(self.seen_rock, self.pos)
+        elif len(self.rock_angles) > 0:  # I can see the rock
             yaw_r = degrees(atan2(self.seen_rock[1] - self.pos[1], self.seen_rock[0] - self.pos[0]))
             yaw_diff = yaw_from_to(self.yaw, yaw_r)
 
-            if yaw_diff > 10 and left < 100:
-                self.mapping()
-            elif yaw_diff < -10 and right < 100:
-                self.mapping()
-            elif abs(yaw_diff) > 10:
-                if self.vel > 0:
-                    self.brake = self.brake_set
-                else:
-                    self.brake = 0
-                    self.steer = np.clip(yaw_diff, -15, 15)
-            elif rock_distance > 1:
-                self.throttle = 0.5
-            else:
-                self.throttle = 0
+            # self.steer = np.clip(yaw_diff, -15, 15)
+            self.steer = np.clip(np.mean(self.rock_angles * 180 / np.pi), -15, 15)
+            print("YAW DIFFERENCE {0}".format(yaw_diff))
+            print("ROCK ANGLE {0}".format(self.steer))
+            if self.vel > 1.0:
+                self.brake = 1
+            elif 0.5 <= self.vel <= 1.0:
+                self.throttle = 0.2
+            elif self.vel < 0.5:
+                self.throttle = 1
+        else:
+            if len(self.nav_angles) < self.threshold_stop_forward:
+                self.throttle = -1
+            else:  # lost it... continue
+                self.started_picking_up = False
+                self.seen_rock = None
+                self.is_collecting = False
+                self.mode = 'finished-command'
 
     def get_navigation_angles(self):
         """
@@ -335,6 +351,18 @@ class RoverState:
         right = len(self.nav_angles[self.nav_angles < -0.1])
 
         return left, center, right
+
+    def get_obstacles_left(self):
+        bottom_close = np.count_nonzero(self.vision_image[145:160, 150:155, 0])
+        middle_far = np.count_nonzero(self.vision_image[135:145, 130:145, 0])
+        up_far = np.count_nonzero(self.vision_image[125:135, 130:145, 0])
+        return bottom_close, middle_far, up_far
+
+    def get_obstacles_right(self):
+        bottom_close = np.count_nonzero(self.vision_image[145:160, 165:170, 0])
+        middle_far = np.count_nonzero(self.vision_image[135:145, 175:190, 0])
+        up_far = np.count_nonzero(self.vision_image[125:135, 175:190, 0])
+        return bottom_close, middle_far, up_far
 
     def generate_exploration_map(self):
         # init the map
@@ -359,12 +387,11 @@ class RoverState:
         left, center, right = self.get_navigation_angles()
         print("Current Mode: {0}".format(self.mode))
         print("Commands: {0!s}".format(self.commands))
-        print("CENTER: ", center)
-        print("RIGHT: ", right)
-        print("LEFT: ", left)
-        print("Velocity", self.vel)
-        print("Stuck counter: ", self.stuck_counter)
-        print("Trapped: ", self.trapped())
+        print("CENTER: {0}  RIGHT: {1} LEFT: {2}".format(center, right, left))
+        print("Stuck counter: {0} , Trapped: {1}".format(self.stuck_counter, self.trapped()))
+        print("Velocity: {0} , Throttle: {1} Brakes: {2}".format(self.vel, self.throttle, self.brake))
+        print("Obstacles Left  bottom-close {0} , middle-far {1}, up-far {2}".format(*self.get_obstacles_left()))
+        print("Obstacles right  bottom-close {0} , middle-far {1}, up-far {2}".format(*self.get_obstacles_right()))
 
         if self.seen_rock is not None:
             print("-------------ROCK ON SIGHT ----------------------")

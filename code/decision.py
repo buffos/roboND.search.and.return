@@ -68,7 +68,7 @@ def decision_step(Rover):
     logger.debug("Current Mode: {0}".format(Rover.mode))
     logger.debug("Current Commands: {0!s}".format(Rover.commands))
 
-    Rover.generate_exploration_map()
+    # Rover.generate_exploration_map()
     # logger.debug(create_navigation_map_string(Rover.navigation_map, 50, 50, Rover.pos))
 
     Rover.print_nav_info()
