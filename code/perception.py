@@ -48,7 +48,7 @@ def rocks_threshold_2(img):
     return mask_rock
 
 
-def rocks_threshold(img, threshold_low=(200, 200, 0), threshold_high=(240, 240, 30)):
+def rocks_threshold(img, threshold_low=(100, 100, 0), threshold_high=(160, 160, 40)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:, :, 0])
     # Require that each pixel be above all three threshold values in RGB
@@ -134,6 +134,14 @@ def locate_rock(points_x, points_y):
         return None, None
 
 
+def locate_rock_in_local(binary_img):
+    ypos, xpos = binary_img.nonzero()
+    if ypos.size > 0 and xpos.size > 0:
+        return np.int_(np.mean(xpos)), np.int_(np.mean(ypos))
+    else:
+        return None, None
+
+
 # Apply the above functions in succession and update the Rover state accordingly
 # noinspection PyPep8Naming
 def perception_step(Rover):
@@ -154,16 +162,13 @@ def perception_step(Rover):
     birds_view = perspective_transform(Rover.img, source, destination)
 
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(160, 160, 160))
+    thresholded_terrain = color_threshold(birds_view, rgb_thresh=(180, 180, 160))
     thresholded_obstacles = obstacles_threshold(birds_view,
-                                                threshold_high=(140, 140, 140),
-                                                threshold_low=(30, 30, 30))
+                                                threshold_high=(150, 150, 140),
+                                                threshold_low=(5, 5, 5))
     thresholded_rocks = rocks_threshold(birds_view)
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
-    # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
-    #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
-    #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
     Rover.terrain = thresholded_terrain
     Rover.vision_image[:, :, 0] = thresholded_obstacles * 255
     Rover.vision_image[:, :, 1] = thresholded_rocks * 255
@@ -189,11 +194,13 @@ def perception_step(Rover):
 
     rocks_x_world, rocks_y_world = locate_rock(rocks_x_world, rocks_y_world)
 
+    # do not change the value unless you see a rock. it would be reset after collecting
+    Rover.seen_rock = Rover.seen_rock if rocks_x_world is None else (rocks_x_world, rocks_y_world)
+    # rock_in_local_x, rock_in_local_y = locate_rock(thresholded_rocks[1], thresholded_rocks[0])
+    # Rover.seen_rock = Rover.seen_rock if rock_in_local_x is None else (rock_in_local_x / scale, rock_in_local_y / scale)
+
     # 7) Update Rover worldmap (to be displayed on right side of screen)
-    # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
-    #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-    #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    if 0.0 <= Rover.roll <= 10 and 0.0 <= Rover.pitch <= 10:
+    if (Rover.roll <= 1.0 or Rover.roll >= 359.0) and (Rover.pitch <= 1.0 or Rover.pitch >= 359.0):
         Rover.worldmap[obstacles_y_world, obstacles_x_world, 0] += 1
         Rover.worldmap[rocks_y_world, rocks_x_world, 1] += 1
         Rover.worldmap[terrain_y_world, terrain_x_world, 2] += 1

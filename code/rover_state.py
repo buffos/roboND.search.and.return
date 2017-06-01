@@ -1,5 +1,6 @@
 import numpy as np
-from utilities import distance
+from utilities import distance, look_to_point, yaw_from_to
+from math import atan2, degrees
 
 
 # Define RoverState() class to retain rover state parameters
@@ -67,7 +68,7 @@ class RoverState:
         # Set to True to trigger rock pickup
         self.send_pickup = False  # type: bool
         # a list of pending commands for the robot
-        self.commands = ['go-yaw 0.0', 'go-yaw 90.0', 'go-yaw 180.0', 'go-yaw 270.0', 'go-yaw 0.0']  # type: list
+        self.commands = ['mapping']  # type: list
         # the departure_point the Robot started from
         self.departure_point = None  # type: tuple
         # robot starting point
@@ -79,6 +80,9 @@ class RoverState:
         # a counter for identifying stuck vehicle
         self.stuck_counter = 0  # type: int
         self.previous_position = None  # type: np.ndarray
+        # it has a position value IF I am seeing a rock on camera.
+        self.seen_rock = None  # type: np.ndarray
+        self.is_collecting = False  # type: bool
         # Worldmap
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples
@@ -94,16 +98,31 @@ class RoverState:
         # just to make sure we are not stuck in any loop with brakes on
         # action will only set those and do not need to unset them.
         print("DISTANCE FROM PREVIOUS POINT: ", distance(self.pos, self.previous_position))
-        if self.stuck_counter == 0 :
+        if self.stuck_counter == 0:
             # change previous position when the robot has traveled
             self.previous_position = self.pos
+
         self.stuck_counter = self.stuck_counter + 1 if distance(self.pos, self.previous_position) < 0.5 else 0
 
-        self.brake = 0
+        # do not speed and brake as hard as speed
+        self.brake = self.vel if self.vel > 2.0 else 0
         self.throttle = 0
         self.steer = 0
 
     def next_cycle(self):
+        # handling stuck robot
+        if self.stuck_counter > 500 and self.mode != 'unstuck':
+            self.commands = ['unstuck'] + self.commands  # put it in front
+            self.mode = 'waiting-command'
+        elif self.stuck_counter < 500 and self.mode == 'unstuck':
+            self.mode = 'finished-command'
+
+        if self.seen_rock is not None and not self.is_collecting:
+            self.brake = 15  # freeze it
+            self.commands = ['collecting'] + self.commands
+            self.mode = 'waiting-command'
+            self.is_collecting = True
+
         if self.mode == 'waiting-command':
             if len(self.commands) != 0:  # there are still commands to execute
                 self.mode = self.commands[0]  # this is one of the known commands that is_executing knows to handle
@@ -124,6 +143,12 @@ class RoverState:
             self.go_forward()
         elif self.mode.startswith('go-yaw'):
             self.go_yaw()
+        elif self.mode == 'mapping':
+            self.mapping()
+        elif self.mode == 'unstuck':
+            self.unstuck()
+        elif self.mode == 'collecting':
+            self.collect()
 
     def is_executing_command(self):
         """
@@ -132,25 +157,61 @@ class RoverState:
         """
         if self.mode.startswith('go-forward') or self.mode.startswith('go-yaw'):
             return True
+        if self.mode in ['mapping', 'unstuck', 'stopping', 'collecting']:
+            return True
         return False
+
+    def mapping(self):
+        trapped = self.trapped()
+        left, center, right = self.get_navigation_angles()
+
+        if trapped > 1 and center < 100:  # so no forward
+            if self.vel > 0:
+                self.brake = self.brake_set  # stop
+            else:
+                self.steer = -15  # steer right. brakes are already set to 0 by update state
+
+        elif trapped > 1 and center > 100:
+            if self.vel > 1:
+                pass
+            else:
+                self.throttle = 0.1  # go slowly its narrow
+        elif center > 300 and left < 300:
+            if self.vel < 1:
+                self.throttle = 0.5
+            else:
+                pass
+        elif center > 300 and left > 300:
+            self.steer = np.random.uniform(10, 15)  # try to follow left wall
+            if self.vel < 1:
+                self.throttle = 0.5
+            else:
+                pass
+        elif left > 300:
+            self.steer = np.random.uniform(10, 15)
+            if self.vel < 1:
+                self.throttle = 0.5
+            else:
+                pass
+        elif right > 300 and left < 150:
+            self.steer = -5
+            if self.vel < 1:
+                self.throttle = 0.5
+            else:
+                pass
+        else:
+            self.steer = self.steer = np.random.uniform(-8, -12)
 
     def go_yaw(self):
         """Will drive the Robot one square ahead"""
         if self.vel > 0:
-            self.throttle = 0
             self.brake = self.brake_set
             return
         else:
-            self.brake = 0
+            pass
 
         target_yaw = float(self.mode.split()[1])  # command is go-yaw angle. always in [-pi pi]
-        current_yaw = self.yaw - 360 if self.yaw > 180 else self.yaw
-
-        # choose the shortest path for rotating
-        if abs(target_yaw - current_yaw) < abs(360 - target_yaw + current_yaw):
-            steering = target_yaw - current_yaw
-        else:
-            steering = -(360 - target_yaw + current_yaw)
+        steering = yaw_from_to(self.yaw, target_yaw)
 
         if abs(steering) < 0.1:  # completed turning
             self.steer = 0
@@ -180,18 +241,63 @@ class RoverState:
             self.departure_point = None  # reached destination
             self.throttle = 0
             self.mode = 'finished-command'
-        elif meters - current_distance >= 1.0:
-            self.throttle = 1
-            self.mode = self.commands[0]
         else:
             self.throttle = 0.5
             self.mode = self.commands[0]
 
-    def collect_rock(self):
+    def unstuck(self):
+        extra_wait = 0
+        strategy_threshold = 300
+        if self.picking_up:
+            extra_wait = 200
+        if strategy_threshold * 2 + extra_wait > self.stuck_counter > strategy_threshold + extra_wait:
+            print("STUCK - LEFT BACK")
+            self.steer = 15
+            self.throttle = -5
+        elif strategy_threshold * 3 + extra_wait > self.stuck_counter >= strategy_threshold * 2 + extra_wait:
+            # try steering the other way
+            print("STUCK - RIGHT BACK")
+            self.steer = -15
+            self.throttle = -5
+        elif strategy_threshold * 4 + extra_wait > self.stuck_counter >= strategy_threshold * 3 + extra_wait:
+            # try steering the other way
+            print("FRONT LEFT-STUCK")
+            self.steer = 15
+            self.throttle = 0
+        elif strategy_threshold * 5 + extra_wait > self.stuck_counter >= strategy_threshold * 4 + extra_wait:
+            # try steering the other way
+            print("FRONT RIGHT-STUCK")
+            self.steer = -15
+            self.throttle = 0
+        elif self.stuck_counter >= strategy_threshold * 5 + extra_wait:
+            self.stuck_counter = strategy_threshold + 1 + extra_wait  # loop again all strategies
+
+    def collect(self):
+        self.is_collecting = True
+
         if self.near_sample and self.vel == 0 and not self.picking_up:
             self.send_pickup = True
-        elif self.near_sample and self.vel > 0:
-            self.mode = 'waiting-command'  # this will suspend commands
+        elif self.near_sample and self.vel == 0 and self.picking_up:
+            pass
+        elif self.send_pickup and not self.picking_up:  # finished picking up
+            self.send_pickup = False
+            self.seen_rock = None
+            self.is_collecting = False
+            self.mode = 'finished-command'
+        else:
+            # new_command = ['go-yaw ' + str(yaw_r), 'go-forward ' + str(rock_distance)]
+            # self.commands = new_command + self.commands  # put it in front
+            # self.mode = 'waiting-command'
+            rock_distance = distance(self.seen_rock, self.pos)
+            yaw_r = degrees(atan2(self.seen_rock[1] - self.pos[1], self.seen_rock[0] - self.pos[0]))
+            yaw_diff = yaw_from_to(self.yaw, yaw_r)
+
+            if abs(yaw_diff) > 2:
+                self.steer = np.clip(yaw_diff, -15, 15)
+            elif rock_distance > 1:
+                self.throttle = 0.5
+            else:
+                self.throttle = 0
 
     def get_navigation_angles(self):
         """
@@ -213,3 +319,25 @@ class RoverState:
         self.navigation_map[accessibility_condition] = 0  # terrain
         self.navigation_map[obstacles_condition] = -2  # obstacles
         self.navigation_map[visited_condition] = 1  # visited
+
+    def trapped(self):
+        left, center, right = self.get_navigation_angles()
+
+        trapped = 0
+        trapped = trapped + 1 if center < 30 else trapped
+        trapped = trapped + 1 if left < 30 else trapped
+        trapped = trapped + 1 if right < 30 else trapped
+        return trapped
+
+    def print_nav_info(self):
+        left, center, right = self.get_navigation_angles()
+        print("Current Mode: {0}".format(self.mode))
+        print("CENTER: ", center)
+        print("RIGHT: ", right)
+        print("LEFT: ", left)
+        print("Velocity", self.vel)
+        print("Stuck counter: ", self.stuck_counter)
+        print("Trapped: ", self.trapped())
+
+        if self.seen_rock is not None:
+            print("-------------ROCK ON SIGHT ----------------------")
