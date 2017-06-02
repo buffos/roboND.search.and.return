@@ -1,6 +1,6 @@
 import numpy as np
-from utilities import distance, look_to_point, yaw_from_to
-from math import atan2, degrees, radians
+from utilities import distance, yaw_from_to
+from math import atan2, degrees
 
 
 # Define RoverState() class to retain rover state parameters
@@ -85,6 +85,7 @@ class RoverState:
         self.escaping = False  # type: bool
         # a counter for identifying stuck vehicle
         self.stuck_counter = 0  # type: int
+        self.stuck_threshold = 500  # type: int
         self.previous_position = None  # type: np.ndarray
         # it has a position value IF I am seeing a rock on camera.
         self.seen_rock = None  # type: np.ndarray
@@ -116,10 +117,10 @@ class RoverState:
 
     def next_cycle(self):
         # handling stuck robot
-        if self.stuck_counter > 500 and self.mode != 'unstuck' and not self.picking_up:
+        if self.stuck_counter > self.stuck_threshold and self.mode != 'unstuck' and not self.picking_up:
             self.commands = ['unstuck'] + self.commands  # put it in front
             self.mode = 'waiting-command'
-        elif self.stuck_counter < 500 and self.mode == 'unstuck':
+        elif self.stuck_counter < self.stuck_threshold and self.mode == 'unstuck':
             self.mode = 'finished-command'
 
         if self.seen_rock is not None and not self.is_collecting:
@@ -170,6 +171,7 @@ class RoverState:
         left, center, right = self.get_navigation_angles()
         bottom_close_l, middle_far_l, up_far_l = self.get_obstacles_left()
         bottom_close_r, middle_far_r, up_far_r = self.get_obstacles_right()
+        center_close, center_far, center_left, center_right = self.get_obstacles_center()
 
         if trapped > 1 and center < 100:  # so no forward
             if self.vel > 0:
@@ -182,9 +184,16 @@ class RoverState:
                 pass
             else:
                 self.throttle = 0.1  # go slowly its narrow
+        elif center_close > 50:  # GETTING CLOSE TO CRASH
+            if self.vel != 0:
+                self.brake = self.brake_set
+            else:  # we stopped
+                self.steer = np.random.uniform(-12, -15)
+
         elif bottom_close_l == 0 and middle_far_l == 0 and up_far_l == 0:
-            self.steer = np.random.uniform(8, 12)*np.random.choice([-1,1],1)[0]
+            # self.steer = np.random.uniform(8, 12) * np.random.choice([-1, 1], 1)[0]
             # to avoid running into circles on open spaces form [-12,-8] U [8, 12]
+            self.steer = np.random.uniform(12, 15)
             self.drive_safely()
         elif bottom_close_l > 0:  # to close to the left wall
             self.steer = np.random.uniform(-12, -15)
@@ -259,8 +268,10 @@ class RoverState:
             self.mode = self.commands[0]
 
     def unstuck(self):
-        if self.picking_up:
-            extra_wait = 200
+        if self.mode == 'collecting':
+            extra_wait = 300
+            if self.stuck_counter < self.stuck_threshold + extra_wait:
+                return
 
         min_strategy = 1
         max_strategy = 7
@@ -328,7 +339,7 @@ class RoverState:
             print("ROCK ANGLE {0}".format(self.steer))
             if self.vel > 1.0:
                 self.brake = 1
-            elif 0.5 <= self.vel <= 1.0:
+            elif 0.5 <= self.vel <= 1:
                 self.throttle = 0.2
             elif self.vel < 0.5:
                 self.throttle = 1
@@ -364,6 +375,13 @@ class RoverState:
         up_far = np.count_nonzero(self.vision_image[125:135, 175:190, 0])
         return bottom_close, middle_far, up_far
 
+    def get_obstacles_center(self):
+        center_close = np.count_nonzero(self.vision_image[140:150, 150:170, 0])
+        center_far = np.count_nonzero(self.vision_image[120:140, 150:170, 0])
+        center_left = np.count_nonzero(self.vision_image[140:150, 130:160, 0])
+        center_right = np.count_nonzero(self.vision_image[140:150, 160:190, 0])
+        return center_close, center_far, center_left, center_right
+
     def generate_exploration_map(self):
         # init the map
         self.navigation_map = np.full(self.worldmap[:, :, 0].shape, -1)  # unknown or empty
@@ -392,6 +410,8 @@ class RoverState:
         print("Velocity: {0} , Throttle: {1} Brakes: {2}".format(self.vel, self.throttle, self.brake))
         print("Obstacles Left  bottom-close {0} , middle-far {1}, up-far {2}".format(*self.get_obstacles_left()))
         print("Obstacles right  bottom-close {0} , middle-far {1}, up-far {2}".format(*self.get_obstacles_right()))
+        print("Obstacles center  center-close {0} , center-far {1},"
+              " center-left {2}, center-right {3}".format(*self.get_obstacles_center()))
 
         if self.seen_rock is not None:
             print("-------------ROCK ON SIGHT ----------------------")

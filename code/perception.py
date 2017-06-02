@@ -184,10 +184,6 @@ def perception_step(Rover):
 
     rocks_x_world, rocks_y_world = locate_rock(rocks_x_world, rocks_y_world)
 
-    # do not change the value unless you see a rock. it would be reset after collecting
-    if not Rover.picking_up:
-        Rover.seen_rock = Rover.seen_rock if rocks_x_world is None else (rocks_x_world, rocks_y_world)
-
     # 7) Update Rover worldmap (to be displayed on right side of screen)
     if (Rover.roll <= 1.0 or Rover.roll >= 359.0) and (Rover.pitch <= 1.0 or Rover.pitch >= 359.0):
         Rover.worldmap[obstacles_y_world, obstacles_x_world, 0] += 1
@@ -199,4 +195,11 @@ def perception_step(Rover):
     Rover.nav_dists, Rover.nav_angles = to_polar_coords(terrain_x_pixel, terrain_y_pixel)
     # Rover.obs_dists, Rover.obs_angles = to_polar_coords(obstacles_x_pixel, obstacles_y_pixel)
     Rover.rock_dists, Rover.rock_angles = to_polar_coords(rocks_x_pixel, rocks_y_pixel)
+    # do not change the value unless you see a rock. it would be reset after collecting
+    if len(Rover.rock_angles) > 0 :
+        print("ANGLEEEEEEEEEEEEEEEEEEEEEEEEEEEEE: ", np.mean(Rover.rock_angles * 180 / np.pi))
+    if not Rover.picking_up and len(Rover.rock_angles) > 0 and -10 <= np.mean(Rover.rock_angles * 180 / np.pi) <= 90:
+        # pick up only what is in my way.
+        Rover.seen_rock = Rover.seen_rock if rocks_x_world is None else (rocks_x_world, rocks_y_world)
+
     return Rover
