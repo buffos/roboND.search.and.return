@@ -69,9 +69,3 @@ def map_code_to_text(code):
     }
     return code_dict[code]
 
-
-v1 = (2, 0)
-yaw = 0
-print(look_to_point(v1, (1,1), yaw))
-
-print(np.random.uniform(5, 10)*np.random.choice([-1,1],1) )

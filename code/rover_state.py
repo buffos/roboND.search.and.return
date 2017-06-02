@@ -183,7 +183,7 @@ class RoverState:
             else:
                 self.throttle = 0.1  # go slowly its narrow
         elif bottom_close_l == 0 and middle_far_l == 0 and up_far_l == 0:
-            self.steer = np.random.uniform(8, 12)*np.random.choice([-1,1],1)
+            self.steer = np.random.uniform(8, 12)*np.random.choice([-1,1],1)[0]
             # to avoid running into circles on open spaces form [-12,-8] U [8, 12]
             self.drive_safely()
         elif bottom_close_l > 0:  # to close to the left wall
