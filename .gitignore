@@ -1,5 +1,5 @@
 test_dataset
-misc
 code/robo_data
 code/inactive.code
 .idea
+*.log

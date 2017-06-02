@@ -100,22 +100,36 @@ class RoverState:
         self.visited_map = np.zeros((200, 200), dtype=np.float)  # type: np.ndarray
 
     def update_state(self):
+        """
+        Handles position update, resetting throttle brakes to zero at every step
+        so no hunting for places that left the brakes on or throttle
+        Also handling of stuck counter
+        :return: 
+        """
+
+        if self.base is None:
+            assert (self.pos is not None, "The robot position cannot be none")
+            self.base = self.pos
         x, y = self.pos
         self.visited_map[int(y), int(x)] = 1  # mark the position as visited
-        # just to make sure we are not stuck in any loop with brakes on
-        # action will only set those and do not need to unset them.
-        if self.stuck_counter == 0:
-            # change previous position when the robot has traveled
-            self.previous_position = self.pos
 
+        if self.stuck_counter == 0:  # handle stuck counter
+            self.previous_position = self.pos  # change previous position when the robot has traveled
         self.stuck_counter = self.stuck_counter + 1 if distance(self.pos, self.previous_position) < 0.5 else 0
 
+        # just to make sure we are not stuck in any loop with brakes on
+        # action will only set those and do not need to unset them.
         # do not speed and brake as hard as speed
         self.brake = self.vel if self.vel > 2.0 else 0
         self.throttle = 0
         self.steer = 0
 
     def next_cycle(self):
+        """
+        The loop the state machine does to execute the command that is on top of the stack
+        First handling if the robot is stuck somewhere
+        :return: 
+        """
         # handling stuck robot
         if self.stuck_counter > self.stuck_threshold and self.mode != 'unstuck' and not self.picking_up:
             self.commands = ['unstuck'] + self.commands  # put it in front
@@ -141,7 +155,7 @@ class RoverState:
 
     def finish_pending_command(self):
         """
-        Interpreting test commands to actual functions
+        Interpreting the command on top of the stuck and calling the corresponding function
         :return: 
         """
         if self.mode.startswith('go-forward'):
@@ -167,6 +181,10 @@ class RoverState:
         return False
 
     def mapping(self):
+        """
+        This function handles the navigation of the robot. Its a "crawl left wall" strategy mostly
+        :return: 
+        """
         trapped = self.trapped()
         left, center, right = self.get_navigation_angles()
         bottom_close_l, middle_far_l, up_far_l = self.get_obstacles_left()
@@ -219,13 +237,20 @@ class RoverState:
             self.steer = self.steer = np.random.uniform(-10, -15)
 
     def drive_safely(self):
+        """
+        Just takes care of speeding in a centralized function
+        :return: 
+        """
         if self.vel < 1:
             self.throttle = 0.5
         else:
             pass
 
     def go_yaw(self):
-        """Will drive the Robot one square ahead"""
+        """
+        Will execute a 'go-yaw value' command and will turn the robot at the desired yaw
+        Needs more tests.
+        """
         if self.vel > 0:
             self.brake = self.brake_set
             return

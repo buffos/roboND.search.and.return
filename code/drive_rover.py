@@ -19,7 +19,7 @@ import time
 from rover_state import RoverState
 import logging
 
-DEBUG_ON = True
+DEBUG_ON = False
 
 logger = logging.getLogger('main_app')
 
@@ -85,7 +85,7 @@ def telemetry(sid, data):
         fps = frame_counter
         frame_counter = 0
         second_counter = time.time()
-    # print("Current FPS: {}".format(fps))
+    print("Current FPS: {}".format(fps))
 
     if data:
         global Rover
