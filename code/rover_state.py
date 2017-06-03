@@ -85,7 +85,7 @@ class RoverState:
         self.escaping = False  # type: bool
         # a counter for identifying stuck vehicle
         self.stuck_counter = 0  # type: int
-        self.stuck_threshold = 500  # type: int
+        self.stuck_threshold = 700  # type: int
         self.previous_position = None  # type: np.ndarray
         # it has a position value IF I am seeing a rock on camera.
         self.seen_rock = None  # type: np.ndarray
@@ -98,6 +98,8 @@ class RoverState:
         self.navigation_map = None  # type: np.ndarray
         # marks every point the robot has
         self.visited_map = np.zeros((200, 200), dtype=np.float)  # type: np.ndarray
+        # an array just to see which driving condition is triggered in the mapping function
+        self.stats = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  # type: list
 
     def update_state(self):
         """
@@ -131,7 +133,7 @@ class RoverState:
         :return: 
         """
         # handling stuck robot
-        if self.stuck_counter > self.stuck_threshold and self.mode != 'unstuck' and not self.picking_up:
+        if self.stuck_counter > self.stuck_threshold and self.mode not in ['unstuck', 'collecting']:
             self.commands = ['unstuck'] + self.commands  # put it in front
             self.mode = 'waiting-command'
         elif self.stuck_counter < self.stuck_threshold and self.mode == 'unstuck':
@@ -185,56 +187,45 @@ class RoverState:
         This function handles the navigation of the robot. Its a "crawl left wall" strategy mostly
         :return: 
         """
-        trapped = self.trapped()
+
         left, center, right = self.get_navigation_angles()
         bottom_close_l, middle_far_l, up_far_l = self.get_obstacles_left()
         bottom_close_r, middle_far_r, up_far_r = self.get_obstacles_right()
         center_close, center_far, center_left, center_right = self.get_obstacles_center()
 
-        if trapped > 1 and center < 100:  # so no forward
-            if self.vel > 0:
-                self.brake = self.brake_set  # stop
-            else:
-                self.steer = -15  # steer right. brakes are already set to 0 by update state
-
-        elif trapped > 1 and center > 100:
-            if self.vel > 1:
-                pass
-            else:
-                self.throttle = 0.1  # go slowly its narrow
-        elif center_close > 50:  # GETTING CLOSE TO CRASH
-            if self.vel != 0:
+        if center_close > 50:  # getting close to hit a wall
+            self.stats[1] += 1
+            if self.vel > 0.5:
                 self.brake = self.brake_set
             else:  # we stopped
-                self.steer = np.random.uniform(-12, -15)
-
-        elif bottom_close_l == 0 and middle_far_l == 0 and up_far_l == 0:
-            # self.steer = np.random.uniform(8, 12) * np.random.choice([-1, 1], 1)[0]
-            # to avoid running into circles on open spaces form [-12,-8] U [8, 12]
+                self.steer = np.random.uniform(12, 15) # go back left so we can continue left front
+                self.throttle = -2.0
+        elif middle_far_l < 80 and not bottom_close_l > 0:  # intersection -> gap in the middle
+            self.stats[2] += 1
             self.steer = np.random.uniform(12, 15)
             self.drive_safely()
+        elif bottom_close_l == 0 and middle_far_l == 0 and up_far_l == 0:  # open space
+            self.stats[3] += 1
+            # self.steer = np.random.uniform(8, 12) * np.random.choice([-1, 1], 1)[0]
+            # to avoid running into circles on open spaces form [-12,-8] U [8, 12]
+            self.steer = 0
+            self.drive_safely()
         elif bottom_close_l > 0:  # to close to the left wall
+            self.stats[4] += 1
             self.steer = np.random.uniform(-12, -15)
             self.drive_safely()
         elif bottom_close_r > 0:  # to close to the right wall
+            self.stats[5] += 1
             self.steer = np.random.uniform(12, 15)
             self.drive_safely()
-        elif middle_far_l < 80:  # intersection -> gap in the middle
-            self.steer = np.random.uniform(12, 15)
-            self.drive_safely()
-        elif center > 300 and left < 301:
-            self.drive_safely()
-        elif center > 300 and left > 300:
+
+        elif left > 300:  # too far away from left
+            self.stats[6] += 1
             self.steer = np.random.uniform(12, 15)  # try to follow left wall
             self.drive_safely()
-        elif left > 300:
-            self.steer = np.random.uniform(12, 15)
-            self.drive_safely()
-        elif right > 300 and left < 150:
-            self.steer = np.random.uniform(-3, -6)
-            self.drive_safely()
         else:
-            self.steer = self.steer = np.random.uniform(-10, -15)
+            self.stats[7] += 1
+            self.drive_safely()
 
     def drive_safely(self):
         """
@@ -242,7 +233,7 @@ class RoverState:
         :return: 
         """
         if self.vel < 1:
-            self.throttle = 0.5
+            self.throttle = 1.0
         else:
             pass
 
@@ -375,6 +366,7 @@ class RoverState:
                 self.started_picking_up = False
                 self.seen_rock = None
                 self.is_collecting = False
+                self.stuck_counter = 0  # reset the counter now that i finished collecting.
                 self.mode = 'finished-command'
 
     def get_navigation_angles(self):
@@ -437,6 +429,7 @@ class RoverState:
         print("Obstacles right  bottom-close {0} , middle-far {1}, up-far {2}".format(*self.get_obstacles_right()))
         print("Obstacles center  center-close {0} , center-far {1},"
               " center-left {2}, center-right {3}".format(*self.get_obstacles_center()))
+        print("Strategy Stats: {0!s}".format(self.stats))
 
         if self.seen_rock is not None:
             print("-------------ROCK ON SIGHT ----------------------")

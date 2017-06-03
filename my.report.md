@@ -22,7 +22,7 @@
 [//]: # (Image References)
 
 [image1]: ./misc/thresholded.jpg
-[image2]: ./calibration_images/example_rock1.jpg 
+[image2]: ./misc/final.jpg
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/916/view) Points
 ### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
@@ -103,9 +103,9 @@ I basically crawl the left wall using the following
 
 #### 2. Launching in autonomous mode your rover can navigate and map autonomously.  Explain your results and how you might improve them in your writeup.  
 
-**Note: Resolution: 800x600, Graphics quality: Fantastic, FPS is about 50.**
+**Note: Resolution: 1024x768, Graphics quality: Good, FPS was not constant and was between 40~50.**
 
-My rover map 97% of the environment with 67.7% fidelity against the ground truth within 15 min, but that may very because of the randomized way the robot picks the angles. I have not programmed it to return to base. It was not a requirement and I run out of time.
+My rover map 99% of the environment with 62.3% fidelity against the ground truth within 20 min (I left it more to do a second lap to find that 6th stone but it did not find it if there was one), but that may very because of the randomized way the robot picks the angles. I have not programmed it to return to base. It was not a requirement and I run out of time.
 
 There are tons of ways to improve this
 - the most important think is I am not using prior knowledge of the environment. I keep track of it but not using it. So a very basic improvement would be to check both the vision data and the visited map data.
@@ -113,8 +113,10 @@ There are tons of ways to improve this
 - The robot could stop and look around when it senses open space (no obstacles around) to improve the understanding of the surrounding. Ofcourse this would have to be augmented with the first step ( use knowledge of the environement for better navigation)
 - Path planning ofcourse would be the next step
 
+- There are some **problems** with the simulator too. If you crash to a rock you can see through them, so you do not get feedback that you hit an obstacle but that is a free way. This is impossible to handle because we see clear but we hit a rock. The only way to handle that is with activating knowledge for the environment.
+- if the robot stuck in a narrow passage behind rocks it might take ages to randomly exit. The problem is not with the algorithm, but with the simulator. The robot **sees** wrongly that its free (behind rock faces) and tries to act normaly. I can "trick" it reach just to that situation but its not generic and it cheating.
+- with my current unstuck algorithm, it will eventually free it self (although that might me **inside** the rocks. I consider this a simulator bug and not of my algorithm. At least for a vision based navigation)
 
-
-![alt text][image2]
+![final image][image2]
 
 

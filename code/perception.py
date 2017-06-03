@@ -196,7 +196,7 @@ def perception_step(Rover):
     # Rover.obs_dists, Rover.obs_angles = to_polar_coords(obstacles_x_pixel, obstacles_y_pixel)
     Rover.rock_dists, Rover.rock_angles = to_polar_coords(rocks_x_pixel, rocks_y_pixel)
     # do not change the value unless you see a rock. it would be reset after collecting
-    if not Rover.picking_up and len(Rover.rock_angles) > 0 and -10 <= np.mean(Rover.rock_angles * 180 / np.pi) <= 90:
+    if not Rover.picking_up and len(Rover.rock_angles) > 0 and np.mean(Rover.rock_dists) <= 100:
         # pick up only what is in my way.
         Rover.seen_rock = Rover.seen_rock if rocks_x_world is None else (rocks_x_world, rocks_y_world)
 
